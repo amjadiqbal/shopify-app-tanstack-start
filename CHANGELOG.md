@@ -17,6 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Documentation
 
 - README: the App Bridge JSX types file needed for `<s-app-nav>` with React 19.
+- README: `src/start.ts` now registers Start's CSRF middleware next to the document middleware (Start warns without it).
 - README: a Scope section (embedded apps only, token exchange instead of the authorization-code flow, what `login()`
   does), exactly when the document middleware sets headers, how app proxy requests are skipped, every compliance
   webhook status code, who checks app proxy timestamps, which session adapters and features were tested and how.

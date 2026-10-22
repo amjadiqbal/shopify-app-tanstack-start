@@ -133,10 +133,13 @@ export const shopifyAppProxy = createMiddleware().server(async (ctx) =>
 ### 4. `src/start.ts`
 
 ```ts
-import { createStart } from '@tanstack/react-start'
+import { createCsrfMiddleware, createStart } from '@tanstack/react-start'
 import { shopifyDocument } from './shopify.middleware'
 
-export const startInstance = createStart(() => ({ requestMiddleware: [shopifyDocument] }))
+// Registering your own request middleware drops Start's default CSRF check for server functions, so add it back.
+const csrfMiddleware = createCsrfMiddleware({ filter: (ctx) => ctx.handlerType === 'serverFn' })
+
+export const startInstance = createStart(() => ({ requestMiddleware: [csrfMiddleware, shopifyDocument] }))
 ```
 
 ### 5. `src/routes/auth/$.ts`
