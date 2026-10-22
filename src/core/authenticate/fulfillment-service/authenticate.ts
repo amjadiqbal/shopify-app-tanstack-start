@@ -1,4 +1,5 @@
 import {ShopifyHeader} from '@shopify/shopify-api';
+import {parseJsonBody} from '../helpers';
 
 import {adminClientFactory} from '../../clients/admin';
 import {BasicParams} from '../../types';
@@ -47,7 +48,7 @@ export function authenticateFulfillmentServiceFactory(
       });
     }
 
-    const payload = JSON.parse(rawBody);
+    const payload = parseJsonBody(rawBody);
     const shop = request.headers.get(ShopifyHeader.Domain) || '';
 
     logger.debug(

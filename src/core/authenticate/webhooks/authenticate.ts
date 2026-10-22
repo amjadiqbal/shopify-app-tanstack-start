@@ -1,4 +1,5 @@
 import {WebhookValidationErrorReason, WebhookType} from '@shopify/shopify-api';
+import {parseJsonBody} from '../helpers';
 
 import type {BasicParams} from '../../types';
 import {adminClientFactory} from '../../clients';
@@ -59,7 +60,7 @@ export function authenticateWebhookFactory<Topics extends string>(
         shop: check.domain,
         topic: check.topic as Topics,
         webhookId: check.webhookId,
-        payload: JSON.parse(rawBody),
+        payload: parseJsonBody(rawBody),
         session: undefined,
         admin: undefined,
         webhookType: check.webhookType,
@@ -73,7 +74,7 @@ export function authenticateWebhookFactory<Topics extends string>(
         shop: check.domain,
         topic: check.topic as Topics,
         webhookId: check.webhookId,
-        payload: JSON.parse(rawBody),
+        payload: parseJsonBody(rawBody),
         session: undefined,
         admin: undefined,
         webhookType: check.webhookType,

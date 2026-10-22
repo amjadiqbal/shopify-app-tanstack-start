@@ -5,6 +5,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-23
+
+### Fixed
+
+- A webhook, Flow or fulfillment service request whose body passes the HMAC check but is not JSON now gets 400 instead
+  of an uncaught `JSON.parse` error.
+- `complianceWebhooks()`: an error thrown by `onError` itself is logged with `console.error` and the answer is still
+  500, instead of escaping the route.
+
+### Documentation
+
+- README: `isEmbeddedApp` is rejected whatever its value; `login()` exists only for App Store and single-merchant apps;
+  the app proxy timestamp window is 90 seconds in either direction; the document middleware handles GET and HEAD;
+  session cleanup failures also go through `onError`; a CSRF check of the README setup in the test app.
+
 ## [0.1.1] - 2026-10-23
 
 ### Fixed

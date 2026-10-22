@@ -354,8 +354,8 @@ describe('admin context helpers inside server functions', () => {
   });
 });
 
-function webhookRequest(topic: string, body: object, hmac?: string) {
-  const raw = JSON.stringify(body);
+function webhookRequest(topic: string, body: object | string, hmac?: string) {
+  const raw = typeof body === 'string' ? body : JSON.stringify(body);
   return new Request(`${APP_URL}/webhooks`, {
     method: 'POST',
     body: raw,
@@ -378,6 +378,16 @@ describe('middleware.webhook', () => {
     expect(webhook.topic).toBe('PRODUCTS_UPDATE');
     expect(webhook.shop).toBe(TEST_SHOP);
     expect(webhook.payload).toEqual({id: 1});
+  });
+
+  it('rejects a correctly signed body that is not JSON with 400', async () => {
+    const {shopify} = setup();
+
+    const response = await caughtResponse(
+      shopify.middleware.webhook({request: webhookRequest('products/update', '<xml/>')}),
+    );
+
+    expect(response.status).toBe(400);
   });
 
   it('rejects a bad HMAC with 401', async () => {
@@ -517,6 +527,47 @@ describe('complianceWebhooks', () => {
 
     expect(missing.status).toBe(400);
     expect(get.status).toBe(405);
+  });
+
+  it('answers 400 to a correctly signed body that is not JSON', async () => {
+    const {shopify} = setup();
+    const customersRedact = vi.fn();
+
+    const response = await shopify.complianceWebhooks({customersRedact})(
+      webhookRequest('customers/redact', 'not json{'),
+    );
+
+    expect(response.status).toBe(400);
+    expect(customersRedact).not.toHaveBeenCalled();
+  });
+
+  it('still answers 500 when onError itself throws', async () => {
+    const {shopify} = setup();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await shopify.complianceWebhooks({
+      customersRedact: () => {
+        throw new Error('handler failed');
+      },
+      onError: () => {
+        throw new Error('onError failed');
+      },
+    })(webhookRequest('customers/redact', {customer: {id: 1}}));
+
+    expect(response.status).toBe(500);
+    expect(consoleError).toHaveBeenCalledOnce();
+    consoleError.mockRestore();
+  });
+
+  it('answers 500 through onError when deleting the sessions fails', async () => {
+    const {shopify, sessionStorage} = setup();
+    vi.spyOn(sessionStorage, 'findSessionsByShop').mockRejectedValue(new Error('storage down'));
+    const onError = vi.fn();
+
+    const response = await shopify.complianceWebhooks({onError})(webhookRequest('shop/redact', {shop_id: 1}));
+
+    expect(response.status).toBe(500);
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({message: 'storage down'}), expect.anything());
   });
 
   it('acknowledges other topics', async () => {

@@ -75,8 +75,9 @@ export type ShopifyStartApp<Config extends AppConfigArg> = ShopifyApp<Config> & 
   authRouteHandler: (request: Request) => Promise<Response>;
   /**
    * Builds a POST handler for Shopify's mandatory compliance webhooks (`customers/data_request`, `customers/redact`,
-   * `shop/redact`). It verifies the HMAC (401 when invalid), calls your handlers, deletes the shop's sessions on
-   * `shop/redact` and `app/uninstalled`, and answers 200.
+   * `shop/redact`). It verifies the HMAC (401 when invalid; 400 for missing headers or a body that is not JSON; 405
+   * for anything but POST), calls your handlers, deletes the shop's sessions on `shop/redact` and `app/uninstalled`,
+   * and answers 200, or 500 when a handler or the session deletion fails (see `onError`).
    */
   complianceWebhooks: (handlers?: ComplianceWebhookHandlers) => (request: Request) => Promise<Response>;
   /** Bodies for TanStack Start middleware. See the README for the one-line `createMiddleware()` wrappers. */

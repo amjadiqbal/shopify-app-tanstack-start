@@ -20,8 +20,9 @@ export interface ComplianceWebhookHandlers {
   /** Any other topic sent to this route. Without it, other topics are acknowledged and ignored. */
   other?: Handler;
   /**
-   * Called when one of your handlers throws. The webhook is then answered with 500, so Shopify retries it, and the
-   * shop's sessions are not deleted yet. Defaults to `console.error`.
+   * Called when handling fails: one of your handlers throws, or deleting the shop's sessions fails. The webhook is then
+   * answered with 500 so Shopify retries it. Defaults to `console.error`. If `onError` itself throws, that error is
+   * logged with `console.error` and the answer is still 500.
    */
   onError?: (error: unknown, webhook: WebhookContext<string>) => unknown;
 }
@@ -41,7 +42,11 @@ export function complianceWebhooksFactory<Config extends AppConfigArg>(app: Shop
       try {
         await dispatch(webhook);
       } catch (error) {
-        await (handlers.onError ?? logError)(error, webhook);
+        try {
+          await (handlers.onError ?? logError)(error, webhook);
+        } catch (onErrorFailure) {
+          logError(onErrorFailure, webhook);
+        }
         return new Response(null, {status: 500});
       }
       return new Response(null, {status: 200});

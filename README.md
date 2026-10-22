@@ -30,8 +30,8 @@ export const loadProducts = createServerFn()
 Shopify's app packages exist for React Router, Remix and Express. Apps on TanStack Start have had to copy auth, webhook and billing code out of boilerplate repos. This package is that code as a library, kept close to Shopify's own implementation so it behaves like the React Router template:
 
 - **Embedded auth with session tokens**: the `id_token` on page loads and the `Authorization: Bearer` header on server function calls, the session token bounce page, token exchange for offline (and optionally online) access tokens, the `afterAuth` hook, and the 401 retry and reauthorize headers App Bridge acts on.
-- **Webhooks**: HMAC verification, typed topics, and a ready handler for the three mandatory compliance topics. It answers 401 to a bad HMAC, 500 when your handler throws (so Shopify retries), and deletes a shop's sessions on `shop/redact` and `app/uninstalled`.
-- **App proxy**: signature and timestamp checks (done by `@shopify/shopify-api`, which accepts timestamps up to 90 seconds old), a session and Admin/Storefront clients for the shop, and `liquid()` responses.
+- **Webhooks**: HMAC verification, typed topics, and a ready handler for the three mandatory compliance topics. It answers 401 to a bad HMAC, 400 to a body that is not JSON, 500 when your handler or the session cleanup fails (so Shopify retries), and deletes a shop's sessions on `shop/redact` and `app/uninstalled`.
+- **App proxy**: signature and timestamp checks (done by `@shopify/shopify-api`, which rejects timestamps more than 90 seconds away from the server's clock, in either direction), a session and Admin/Storefront clients for the shop, and `liquid()` responses.
 - **Billing**: `require`, `check`, `request`, `cancel`, usage records and capped amounts. The confirmation page opens at the top level, whether billing runs while a page renders or in a server function called from the browser.
 - **The rest of the React Router server package**: `authenticate.flow`, `fulfillmentService`, `pos`, `public.checkout`, `public.customerAccount`, `unauthenticated.admin` and `storefront`, `registerWebhooks`, `login`, `scopes`, merchant custom apps (`AppDistribution.ShopifyAdmin`), and any `@shopify/shopify-app-session-storage-*` adapter (only the SQLite and memory adapters have been tried; see [What's tested](#whats-tested)).
 - **TanStack Start glue**: request and function middleware bodies, an auth route handler, Shopify's `Content-Security-Policy: frame-ancestors` and preload headers on app pages ([details](#how-it-fits-tanstack-start)), Responses converted to router redirects where Start needs them, and an `AppProvider` that routes App Bridge navigation through TanStack Router.
@@ -46,9 +46,9 @@ Add a session storage adapter, for example `@shopify/shopify-app-session-storage
 
 ## Scope
 
-- **Embedded apps only.** Apps are always embedded in the Shopify admin; passing `isEmbeddedApp: false` throws.
+- **Embedded apps only.** Apps are always embedded in the Shopify admin. The `isEmbeddedApp` option is not accepted: passing it at all, `true` or `false`, throws.
 - **Token exchange, not the OAuth authorization-code flow.** App Store and single-merchant apps rely on Shopify-managed installation (`use_legacy_install_flow = false`) and exchange the session token for an access token. There is no `/auth/callback` handler. Merchant custom apps (`distribution: AppDistribution.ShopifyAdmin`) use the `adminApiAccessToken` you configure instead.
-- **`login()`** validates the shop domain from a login form and redirects to that store's install page (`https://admin.shopify.com/store/<store>/oauth/install?client_id=...`), where Shopify's managed installation takes over. For merchant custom apps it redirects to your auth path instead.
+- **`login()`** validates the shop domain from a login form and redirects to that store's install page (`https://admin.shopify.com/store/<store>/oauth/install?client_id=...`), where Shopify's managed installation takes over. `login()` exists only for App Store and single-merchant apps; merchant custom apps (`AppDistribution.ShopifyAdmin`) have no `login()`.
 
 ## Set up an embedded app
 
@@ -217,7 +217,7 @@ declare module 'react' {
 | `billing.request()` or `redirect()` in a server function | While a page renders, the Response becomes a router redirect (billing goes through `/auth/exit-iframe`, which opens the confirmation page at the top level). Called from the browser, it is a 401 with `X-Shopify-API-Request-Failure-Reauthorize-Url`, which App Bridge follows. |
 | Webhooks, app proxy | Server routes with the `shopifyWebhook` or `shopifyAppProxy` middleware, or `shopify.authenticate.webhook(request)` and `shopify.authenticate.public.appProxy(request)` in a handler. |
 
-`middleware.document` treats every GET page request as part of the embedded app. Pass `exclude` (path prefixes or RegExps) for public pages and for GET server routes that are not admin pages. It also skips the auth path, and requests that carry app proxy parameters (both `signature` and `path_prefix`). It only checks that those parameters are present: their signature is checked by the app proxy middleware, so serve app proxy paths with `shopifyAppProxy` (or `authenticate.public.appProxy`). A page reached with fake proxy parameters still gets no admin data, because `middleware.admin` authenticates every server function on its own.
+`middleware.document` treats every GET and HEAD page request as part of the embedded app. Pass `exclude` (path prefixes or RegExps) for public pages and for GET server routes that are not admin pages. It also skips the auth path, and requests that carry app proxy parameters (both `signature` and `path_prefix`). It only checks that those parameters are present: their signature is checked by the app proxy middleware, so serve app proxy paths with `shopifyAppProxy` (or `authenticate.public.appProxy`). A page reached with fake proxy parameters still gets no admin data, because `middleware.admin` authenticates every server function on its own.
 
 Headers it sets on the pages it handles, as Shopify's React Router package does:
 
@@ -261,7 +261,7 @@ export const Route = createFileRoute('/webhooks/products')({
 })
 ```
 
-`complianceWebhooks()` answers 401 to a bad HMAC (Shopify's compliance check expects that), 400 when the HMAC header, other required Shopify headers or the body are missing, 405 to anything but POST, and 200 once your handler finishes. It deletes the shop's stored sessions on `shop/redact` and `app/uninstalled`. If your handler throws, it calls `onError` (default `console.error`), answers 500 so Shopify retries, and leaves the sessions in place. Do slow work in a queue, because Shopify retries a webhook that takes more than 5 seconds.
+`complianceWebhooks()` answers 401 to a bad HMAC (Shopify's compliance check expects that), 400 when the HMAC header, other required Shopify headers or the body are missing, or when the signed body is not JSON, 405 to anything but POST, and 200 once your handler finishes. It deletes the shop's stored sessions on `shop/redact` and `app/uninstalled`. If your handler throws, or deleting the sessions fails, it calls `onError` (default `console.error`) and answers 500 so Shopify retries; when your handler is the one that failed, the sessions are left in place. If `onError` itself throws, that error is logged with `console.error` and the answer is still 500. Do slow work in a queue, because Shopify retries a webhook that takes more than 5 seconds.
 
 ## App proxy
 
@@ -310,7 +310,7 @@ Not ported: the React Router error boundary, `AppProxyProvider` and `AppProxyLin
 
 ## What's tested
 
-- **404 unit tests, all passing.** 367 are Shopify's own tests for the React Router package's server code, ported to Vitest and run against this package's core: token exchange, bounce and exit-iframe pages, bot rejection, billing, scopes, webhooks, app proxy, checkout, customer account, POS, Flow, fulfillment service, unauthenticated contexts and token refresh. 37 are new tests for the Start layer, including type tests that check the middleware context types reach `createServerFn().handler()` and server route handlers with the real `@tanstack/react-start` types.
+- **408 unit tests, all passing.** 367 are Shopify's own tests for the React Router package's server code, ported to Vitest and run against this package's core: token exchange, bounce and exit-iframe pages, bot rejection, billing, scopes, webhooks, app proxy, checkout, customer account, POS, Flow, fulfillment service, unauthenticated contexts and token refresh. 41 are new tests for the Start layer, including type tests that check the middleware context types reach `createServerFn().handler()` and server route handlers with the real `@tanstack/react-start` types.
 - **A real TanStack Start app** (Start 1.169, Router 1.170, React 19, Vite 8, Node 26) that installs the packed tarball and uses a SQLite session store, checked in the browser and with curl. Shopify itself was simulated: session tokens signed with the app secret, webhook and app proxy HMACs computed as Shopify computes them, the Admin API (token exchange and GraphQL) faked on the server's `fetch`, and a small stand-in for App Bridge that adds the bearer token, retries on the 401 retry header and dispatches `shopify:navigate`. Seen working:
   - embedded page load with token exchange, the offline session stored in SQLite, `afterAuth` run once, and server functions reusing the page's authentication during server rendering;
   - the bounce redirect, the redirect into the admin, the App Bridge page outside the admin, the exit-iframe page and its refusal of a foreign destination;

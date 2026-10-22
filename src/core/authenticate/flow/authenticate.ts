@@ -1,4 +1,5 @@
 import {adminClientFactory} from '../../clients/admin';
+import {parseJsonBody} from '../helpers';
 import {ensureValidOfflineSession} from '../../helpers';
 import {BasicParams} from '../../types';
 
@@ -36,7 +37,7 @@ export function authenticateFlowFactory(params: BasicParams): AuthenticateFlow {
       });
     }
 
-    const payload = JSON.parse(rawBody);
+    const payload = parseJsonBody(rawBody);
 
     logger.debug('Flow request is valid, looking for an offline session', {
       shop: payload.shopify_domain,
