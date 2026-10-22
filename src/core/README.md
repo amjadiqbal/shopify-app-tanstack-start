@@ -11,6 +11,7 @@ Changes from upstream, so the code can be re-synced with later Shopify releases:
 - The web-api adapter and runtime string are set inside `shopifyApp()` instead of at import time.
 - Library name, user agent and version (`version.ts`) changed; JSDoc `@example` blocks (React Router code) removed.
 - `override-logger.ts`: `deprecated()` only warns.
+- `authenticate/admin/strategies/token-exchange.ts`: removed a stray upstream `console.log` of `config.future.expiringOfflineAccessTokens` that ran on every token exchange (0.1.1).
 - Tests run on vitest (`vi` for `jest`, `vitest-fetch-mock` for `jest-fetch-mock`); a few un-awaited `rejects`
   assertions are now awaited.
 

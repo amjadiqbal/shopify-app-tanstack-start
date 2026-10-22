@@ -19,6 +19,11 @@ export interface ComplianceWebhookHandlers {
   appUninstalled?: Handler;
   /** Any other topic sent to this route. Without it, other topics are acknowledged and ignored. */
   other?: Handler;
+  /**
+   * Called when one of your handlers throws. The webhook is then answered with 500, so Shopify retries it, and the
+   * shop's sessions are not deleted yet. Defaults to `console.error`.
+   */
+  onError?: (error: unknown, webhook: WebhookContext<string>) => unknown;
 }
 
 export function complianceWebhooksFactory<Config extends AppConfigArg>(app: ShopifyApp<Config>) {
@@ -33,6 +38,16 @@ export function complianceWebhooksFactory<Config extends AppConfigArg>(app: Shop
         throw errorOrResponse;
       }
 
+      try {
+        await dispatch(webhook);
+      } catch (error) {
+        await (handlers.onError ?? logError)(error, webhook);
+        return new Response(null, {status: 500});
+      }
+      return new Response(null, {status: 200});
+    };
+
+    async function dispatch(webhook: WebhookContext<string>) {
       switch (webhook.topic) {
         case 'CUSTOMERS_DATA_REQUEST':
           await handlers.customersDataRequest?.(webhook);
@@ -51,9 +66,12 @@ export function complianceWebhooksFactory<Config extends AppConfigArg>(app: Shop
         default:
           await handlers.other?.(webhook);
       }
-      return new Response(null, {status: 200});
-    };
+    }
   };
+}
+
+function logError(error: unknown, webhook: WebhookContext<string>) {
+  console.error(`[shopify-app-tanstack-start] ${webhook.topic} webhook handler failed for ${webhook.shop}:`, error);
 }
 
 async function deleteShopSessions<Config extends AppConfigArg>(app: ShopifyApp<Config>, shop: string) {

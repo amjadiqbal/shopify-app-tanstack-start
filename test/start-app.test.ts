@@ -472,6 +472,53 @@ describe('complianceWebhooks', () => {
     expect(await sessionStorage.findSessionsByShop('other.myshopify.com')).toHaveLength(1);
   });
 
+  it('answers 500 and keeps the sessions when a handler throws, so Shopify retries', async () => {
+    const {shopify, sessionStorage} = setup();
+    await sessionStorage.storeSession(new Session({id: 'offline_x', shop: TEST_SHOP, state: '', isOnline: false}));
+    const failure = new Error('database down');
+    const onError = vi.fn();
+
+    const response = await shopify.complianceWebhooks({
+      shopRedact: () => {
+        throw failure;
+      },
+      onError,
+    })(webhookRequest('shop/redact', {shop_id: 1}));
+
+    expect(response.status).toBe(500);
+    expect(onError).toHaveBeenCalledWith(failure, expect.objectContaining({topic: 'SHOP_REDACT', shop: TEST_SHOP}));
+    expect(await sessionStorage.findSessionsByShop(TEST_SHOP)).toHaveLength(1);
+  });
+
+  it('logs a failing handler with console.error by default', async () => {
+    const {shopify} = setup();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await shopify.complianceWebhooks({
+      customersRedact: async () => {
+        throw new Error('boom');
+      },
+    })(webhookRequest('customers/redact', {customer: {id: 1}}));
+
+    expect(response.status).toBe(500);
+    expect(consoleError).toHaveBeenCalledOnce();
+    consoleError.mockRestore();
+  });
+
+  it('answers 400 when the HMAC header is missing and 405 to a GET', async () => {
+    const {shopify} = setup();
+    const handler = shopify.complianceWebhooks();
+    const request = webhookRequest('customers/redact', {customer: {id: 1}});
+    const headers = new Headers(request.headers);
+    headers.delete('X-Shopify-Hmac-Sha256');
+
+    const missing = await handler(new Request(request.url, {method: 'POST', headers, body: '{}'}));
+    const get = await handler(new Request(request.url));
+
+    expect(missing.status).toBe(400);
+    expect(get.status).toBe(405);
+  });
+
   it('acknowledges other topics', async () => {
     const {shopify} = setup();
     const other = vi.fn();

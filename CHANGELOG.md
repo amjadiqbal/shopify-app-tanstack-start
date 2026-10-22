@@ -5,9 +5,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-23
+
+### Fixed
+
+- Removed a stray `console.log` of `config.future.expiringOfflineAccessTokens` (inherited from upstream) that ran on every
+  token exchange.
+- `complianceWebhooks()`: a handler that throws no longer escapes. The webhook is answered with 500 so Shopify retries,
+  the shop's sessions are kept, and the new `onError` option (default `console.error`) receives the error.
+
 ### Documentation
 
-- README: the App Bridge JSX types file needed for `<s-app-nav>` with React 19 (found in the fresh-install check).
+- README: the App Bridge JSX types file needed for `<s-app-nav>` with React 19.
+- README: a Scope section (embedded apps only, token exchange instead of the authorization-code flow, what `login()`
+  does), exactly when the document middleware sets headers, how app proxy requests are skipped, every compliance
+  webhook status code, who checks app proxy timestamps, which session adapters and features were tested and how.
 
 ## [0.1.0] - 2026-10-23
 
