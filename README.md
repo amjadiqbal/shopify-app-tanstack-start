@@ -136,7 +136,8 @@ export const shopifyAppProxy = createMiddleware().server(async (ctx) =>
 import { createCsrfMiddleware, createStart } from '@tanstack/react-start'
 import { shopifyDocument } from './shopify.middleware'
 
-// Registering your own request middleware drops Start's default CSRF check for server functions, so add it back.
+// Listing your own request middleware drops Start's default CSRF check for server functions. Without this line a
+// cross-site POST that carries a valid session token is accepted; with it, it gets 403.
 const csrfMiddleware = createCsrfMiddleware({ filter: (ctx) => ctx.handlerType === 'serverFn' })
 
 export const startInstance = createStart(() => ({ requestMiddleware: [csrfMiddleware, shopifyDocument] }))
@@ -317,6 +318,7 @@ Not ported: the React Router error boundary, `AppProxyProvider` and `AppProxyLin
   - server functions called from the browser, an expired token answered with 401 and retried, and `<s-app-nav>` navigation without page reloads;
   - billing from a page load (through exit-iframe) and from the browser (reauthorize header);
   - compliance webhooks (200, and 401 on a bad HMAC), the webhook middleware, app proxy `liquid()` (and 400 on a bad signature), bot user agents (410), `frame-ancestors` and preload headers, and a production build served with `vite preview`.
+- **CSRF with the README setup**: in the test app, a cross-site POST to a server function with a valid session token got 403 with `createCsrfMiddleware` registered, and 200 without it; same-origin calls got 200.
 - **Covered only by the ported unit tests**, not tried in the test app: `authenticate.flow`, `pos`, `fulfillmentService`, `public.checkout`, `public.customerAccount`, and merchant custom apps (`AppDistribution.ShopifyAdmin`).
 - **The React entry (`appBridgeHead`, `AppProvider`) has no unit tests.** It was checked in the test app: the head tags in the production HTML, and `AppProvider` turning App Bridge stand-in navigation events into router navigation.
 - **Not tested against a live Shopify store yet**: a real development store, the Shopify CLI (`shopify app dev`), the real App Bridge inside the admin iframe, real Admin GraphQL responses, and session adapters other than SQLite and memory. Please open an issue if anything behaves differently on a live store.
