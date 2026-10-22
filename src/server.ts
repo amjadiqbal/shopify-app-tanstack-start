@@ -21,5 +21,5 @@ export type {
   StartAdminContext,
   StartMiddleware,
 } from './start/app';
-export {shopifyApp} from './start/app';
+export {ShopifyResponseError, shopifyApp} from './start/app';
 export type {ComplianceWebhookHandlers} from './start/compliance';

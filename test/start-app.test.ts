@@ -14,7 +14,7 @@ import {
   TEST_SHOP,
   testConfig,
 } from '../src/core/__test-helpers';
-import {shopifyApp} from '../src/server';
+import {ShopifyResponseError, shopifyApp} from '../src/server';
 
 // Start's request helpers only work inside a running Start request, so the tests stand in for them.
 const start = vi.hoisted(() => ({request: undefined as Request | undefined, headers: new Map<string, string>()}));
@@ -138,16 +138,29 @@ describe('middleware.document', () => {
     expect(start.headers.size).toBe(0);
   });
 
-  it('adds headers but does not authenticate pages without admin parameters', async () => {
+  it('leaves signed app proxy requests to their own middleware', async () => {
     const {shopify} = setup();
     const url = new URL('/proxy/page', APP_URL);
     url.searchParams.set('shop', TEST_SHOP);
-    url.searchParams.set('signature', 'not-checked-here');
+    url.searchParams.set('path_prefix', '/apps/page');
+    url.searchParams.set('signature', 'checked-by-the-app-proxy-middleware');
 
     const context = await shopify.middleware.document({request: new Request(url), handlerType: 'router'});
 
     expect(context).toEqual({shopifyAdmin: undefined});
-    expect(start.headers.get('content-security-policy')).toContain(`frame-ancestors https://${TEST_SHOP}`);
+    expect(start.headers.size).toBe(0);
+  });
+
+  it('answers a page opened outside the admin with the App Bridge page', async () => {
+    const {shopify} = setup();
+
+    const response = await caughtResponse(
+      shopify.middleware.document({request: new Request(`${APP_URL}/products`), handlerType: 'router'}),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('text/html;charset=utf-8');
+    expect(await response.text()).toContain('app-bridge.js');
   });
 
   it('authenticates an embedded admin page load and sets frame-ancestors', async () => {
@@ -237,6 +250,17 @@ describe('middleware.admin', () => {
 
     expect(response.status).toBe(401);
     expect(response.headers.get('X-Shopify-Retry-Invalid-Session-Request')).toBe('1');
+  });
+
+  it('turns any other Response into a ShopifyResponseError while a page is server-rendered', async () => {
+    const {shopify} = setup();
+    start.request = new Request(`${APP_URL}/settings`);
+
+    const error = await caught(shopify.middleware.admin({context: {shopifyAdmin: undefined}}));
+
+    expect(error).toBeInstanceOf(ShopifyResponseError);
+    expect((error as ShopifyResponseError).status).toBe(200);
+    expect((error as Error).message).toContain('while rendering /settings');
   });
 
   it('turns a redirect into a router redirect while a page is server-rendered', async () => {

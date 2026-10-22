@@ -46,10 +46,13 @@ export interface DocumentContext<Config extends AppConfigArg> {
  */
 export interface StartMiddleware<Config extends AppConfigArg> {
   /**
-   * For a global request middleware (register it in `src/start.ts`). On page requests it sets the
-   * `Content-Security-Policy: frame-ancestors` and preload headers Shopify requires, and when the request is an admin
-   * page load (it carries `embedded`, `host` or `id_token`) it runs `authenticate.admin()`. A Response it throws
-   * (the session token bounce redirect, the App Bridge page, the redirect into the admin) goes to the browser as is.
+   * For a global request middleware (register it in `src/start.ts`). Every page request (GET or HEAD, not a server
+   * function call) is treated as an embedded admin page: it gets the `Content-Security-Policy: frame-ancestors` and
+   * preload headers Shopify requires and is authenticated with `authenticate.admin()`. A Response that throws (the
+   * session token bounce redirect, the App Bridge page, the redirect into the admin) goes to the browser as is.
+   *
+   * Exclude pages and GET server routes that are not part of the embedded app with `options.exclude`. The auth path
+   * prefix and signed app proxy requests are always left alone.
    */
   document: (args: RequestMiddlewareArgs, options?: DocumentMiddlewareOptions) => Promise<DocumentContext<Config>>;
   /**
@@ -80,7 +83,10 @@ export type ShopifyStartApp<Config extends AppConfigArg> = ShopifyApp<Config> & 
   middleware: StartMiddleware<Config>;
 };
 
-const ADMIN_DOCUMENT_PARAMS = ['embedded', 'host', 'id_token'];
+/** Shopify signs app proxy requests with `signature`; they have their own middleware. */
+function isAppProxyRequest(url: URL) {
+  return url.searchParams.has('signature') && url.searchParams.has('path_prefix');
+}
 
 /**
  * Creates the object your app uses to talk to Shopify, with TanStack Start helpers on top.
@@ -128,13 +134,14 @@ export function shopifyApp<Config extends AppConfigArg>(appConfig: Readonly<Conf
     async document({request, handlerType}, options = {}) {
       const url = new URL(request.url);
       const isPage = handlerType !== 'serverFn' && (request.method === 'GET' || request.method === 'HEAD');
-      if (!isPage || isExcluded(url.pathname, options.exclude ?? [])) return {shopifyAdmin: undefined};
+      if (!isPage || isExcluded(url.pathname, options.exclude ?? []) || isAppProxyRequest(url)) {
+        return {shopifyAdmin: undefined};
+      }
 
       const headers = new Headers();
       app.addDocumentResponseHeaders(request, headers);
       for (const [name, value] of headers) setResponseHeader(name, value);
 
-      if (!ADMIN_DOCUMENT_PARAMS.some((param) => url.searchParams.has(param))) return {shopifyAdmin: undefined};
       return {shopifyAdmin: await authenticateAdmin(request)};
     },
 
@@ -167,8 +174,9 @@ export function shopifyApp<Config extends AppConfigArg>(appConfig: Readonly<Conf
 }
 
 /**
- * A server function called while a page is server-rendered runs inside the page request, where Start only follows
- * its own redirects. Plain redirect Responses are converted so the page redirects; anything else is rethrown.
+ * A server function called while a page is server-rendered runs inside the page request, where Start follows its own
+ * redirects but cannot send another Response. Redirect Responses become router redirects; any other Response becomes
+ * an error for the route's error boundary (usually a page the document middleware was told to exclude).
  * Server functions called from the browser carry a session token header and get the Response unchanged, which App
  * Bridge understands (401 with a retry or reauthorize header).
  */
@@ -182,5 +190,21 @@ function toServerFunctionError(errorOrResponse: unknown, request: Request): unkn
       headers: errorOrResponse.headers,
     });
   }
-  return errorOrResponse;
+  return new ShopifyResponseError(errorOrResponse, new URL(request.url).pathname);
+}
+
+/** Thrown by the admin middleware while server rendering when authentication answered with a non-redirect Response. */
+export class ShopifyResponseError extends Error {
+  readonly response: Response;
+  readonly status: number;
+
+  constructor(response: Response, pathname: string) {
+    super(
+      `Shopify authentication answered HTTP ${response.status} while rendering ${pathname}. Open the app from the ` +
+        'Shopify admin, or check that the document middleware is registered and does not exclude this page.',
+    );
+    this.name = 'ShopifyResponseError';
+    this.response = response;
+    this.status = response.status;
+  }
 }
