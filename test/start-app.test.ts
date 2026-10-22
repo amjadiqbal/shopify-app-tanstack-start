@@ -1,4 +1,4 @@
-import {Session} from '@shopify/shopify-api';
+import {BillingInterval, Session} from '@shopify/shopify-api';
 import {createSHA256HMAC, HashFormat} from '@shopify/shopify-api/runtime';
 import {MemorySessionStorage} from '@shopify/shopify-app-session-storage-memory';
 import {isRedirect} from '@tanstack/react-router';
@@ -8,13 +8,16 @@ import {
   API_SECRET_KEY,
   APP_URL,
   BASE64_HOST,
+  GRAPHQL_URL,
   getHmac,
   getJwt,
+  mockExternalRequest,
   setUpValidSession,
   TEST_SHOP,
   testConfig,
 } from '../src/core/__test-helpers';
 import {ShopifyResponseError, shopifyApp} from '../src/server';
+import {fetchMock} from './fetch-mock';
 
 // Start's request helpers only work inside a running Start request, so the tests stand in for them.
 const start = vi.hoisted(() => ({request: undefined as Request | undefined, headers: new Map<string, string>()}));
@@ -219,8 +222,14 @@ describe('middleware.admin', () => {
       handlerType: 'router',
     });
 
-    // getRequest() would throw: no request is set.
-    expect(await shopify.middleware.admin({context: {shopifyAdmin}})).toBe(shopifyAdmin);
+    start.request = new Request(await adminPageUrl());
+    const fetchesBefore = fetchMock.mock.calls.length;
+
+    const context = await shopify.middleware.admin({context: {shopifyAdmin}});
+
+    expect(context.session).toBe(shopifyAdmin?.session);
+    expect(context.sessionToken).toBe(shopifyAdmin?.sessionToken);
+    expect(fetchMock.mock.calls.length).toBe(fetchesBefore);
   });
 
   it('authenticates a server function call with the session token header', async () => {
@@ -275,6 +284,73 @@ describe('middleware.admin', () => {
     const redirect = error as Response & {options: {href: string; statusCode: number}};
     expect(redirect.options.statusCode).toBe(302);
     expect(redirect.options.href).toMatch(/^\/auth\/session-token\?/);
+  });
+});
+
+describe('admin context helpers inside server functions', () => {
+  const BILLING = {
+    Pro: {lineItems: [{amount: 9, currencyCode: 'USD', interval: BillingInterval.Every30Days}]},
+  } as const;
+
+  function mockPurchase() {
+    return mockExternalRequest({
+      request: new Request(GRAPHQL_URL, {method: 'POST', body: 'test'}),
+      response: new Response(
+        JSON.stringify({
+          data: {
+            appSubscriptionCreate: {
+              userErrors: [],
+              confirmationUrl: 'https://admin.shopify.com/store/shop/charges/confirm',
+              appSubscription: {id: 'gid://shopify/AppSubscription/1'},
+            },
+          },
+        }),
+      ),
+    });
+  }
+
+  async function adminContext(request: Request) {
+    const sessionStorage = new MemorySessionStorage();
+    const shopify = shopifyApp(testConfig({sessionStorage, billing: BILLING}));
+    await setUpValidSession(sessionStorage);
+    start.request = request;
+    return shopify.middleware.admin({context: {}});
+  }
+
+  it('turns billing.request() into a router redirect to the exit-iframe page while server rendering', async () => {
+    const context = await adminContext(new Request(await adminPageUrl('/billing')));
+    await mockPurchase();
+
+    const error = await caught(context.billing.request({plan: 'Pro', isTest: true}));
+
+    expect(isRedirect(error)).toBe(true);
+    const href = new URL((error as Response & {options: {href: string}}).options.href, APP_URL);
+    expect(href.pathname).toBe('/auth/exit-iframe');
+    expect(href.searchParams.get('exitIframe')).toBe('https://admin.shopify.com/store/shop/charges/confirm');
+  });
+
+  it('leaves the 401 reauthorize Response for App Bridge when called from the browser', async () => {
+    const {token} = await getJwt();
+    const context = await adminContext(
+      new Request(`${APP_URL}/_serverFn/abc`, {method: 'POST', headers: {authorization: `Bearer ${token}`}}),
+    );
+    await mockPurchase();
+
+    const response = await caughtResponse(context.billing.request({plan: 'Pro', isTest: true}));
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get('X-Shopify-API-Request-Failure-Reauthorize-Url')).toBe(
+      'https://admin.shopify.com/store/shop/charges/confirm',
+    );
+  });
+
+  it('returns a router redirect from redirect() for an in-app path', async () => {
+    const context = await adminContext(new Request(await adminPageUrl('/billing')));
+
+    const result = context.redirect('/settings');
+
+    expect(isRedirect(result)).toBe(true);
+    expect(new URL((result as Response & {options: {href: string}}).options.href).pathname).toBe('/settings');
   });
 });
 

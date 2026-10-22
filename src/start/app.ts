@@ -1,4 +1,4 @@
-import {redirect as routerRedirect} from '@tanstack/react-router';
+import {isRedirect, redirect as routerRedirect} from '@tanstack/react-router';
 import {getRequest, setResponseHeader} from '@tanstack/react-start/server';
 import type {AdminContext as CoreAdminContext} from '../core/authenticate/admin/types';
 import type {AppProxyContext, AppProxyContextWithSession} from '../core/authenticate/public/appProxy/types';
@@ -146,12 +146,12 @@ export function shopifyApp<Config extends AppConfigArg>(appConfig: Readonly<Conf
     },
 
     async admin({context}) {
-      const fromDocument = (context as Partial<DocumentContext<Config>> | undefined)?.shopifyAdmin;
-      if (fromDocument) return fromDocument;
-
       const request = getRequest();
+      const fromDocument = (context as Partial<DocumentContext<Config>> | undefined)?.shopifyAdmin;
+      if (fromDocument) return withStartResponses(fromDocument, request);
+
       try {
-        return await authenticateAdmin(request);
+        return withStartResponses(await authenticateAdmin(request), request);
       } catch (errorOrResponse) {
         throw toServerFunctionError(errorOrResponse, request);
       }
@@ -174,14 +174,17 @@ export function shopifyApp<Config extends AppConfigArg>(appConfig: Readonly<Conf
 }
 
 /**
- * A server function called while a page is server-rendered runs inside the page request, where Start follows its own
- * redirects but cannot send another Response. Redirect Responses become router redirects; any other Response becomes
- * an error for the route's error boundary (usually a page the document middleware was told to exclude).
- * Server functions called from the browser carry a session token header and get the Response unchanged, which App
- * Bridge understands (401 with a retry or reauthorize header).
+ * Server functions send Responses differently from React Router loaders:
+ *
+ * - A redirect Response becomes a router redirect, the only kind Start follows, whether the server function runs
+ *   while a page is server-rendered or is called from the browser.
+ * - While a page is server-rendered (no session token header), any other Response becomes a ShopifyResponseError for
+ *   the route's error boundary, because Start cannot send a second Response for the page.
+ * - Called from the browser, other Responses go back unchanged; App Bridge acts on them (a 401 with
+ *   `X-Shopify-Retry-Invalid-Session-Request` or `X-Shopify-API-Request-Failure-Reauthorize-Url`).
  */
 function toServerFunctionError(errorOrResponse: unknown, request: Request): unknown {
-  if (!(errorOrResponse instanceof Response) || request.headers.has('authorization')) return errorOrResponse;
+  if (!(errorOrResponse instanceof Response) || isRedirect(errorOrResponse)) return errorOrResponse;
   const location = errorOrResponse.headers.get('Location');
   if (location && errorOrResponse.status >= 300 && errorOrResponse.status < 400) {
     return routerRedirect({
@@ -190,7 +193,53 @@ function toServerFunctionError(errorOrResponse: unknown, request: Request): unkn
       headers: errorOrResponse.headers,
     });
   }
+  if (request.headers.has('authorization')) return errorOrResponse;
   return new ShopifyResponseError(errorOrResponse, new URL(request.url).pathname);
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: wraps functions of any signature and returns them with the same type.
+type AnyFunction = (...args: any[]) => any;
+
+function wrapFunction<Fn extends AnyFunction>(fn: Fn, request: Request, convertReturned: boolean): Fn {
+  const convert = (value: unknown) => {
+    throw toServerFunctionError(value, request);
+  };
+  return ((...args: Parameters<Fn>) => {
+    let result: unknown;
+    try {
+      result = fn(...args);
+    } catch (error) {
+      convert(error);
+    }
+    if (result instanceof Promise) return result.catch(convert);
+    // `redirect()` returns its Response for the caller to throw or return.
+    if (convertReturned && result instanceof Response) return toServerFunctionError(result, request);
+    return result;
+  }) as Fn;
+}
+
+function wrapMethods<T extends object>(target: T, request: Request): T {
+  const wrapped = {...target} as Record<string, unknown>;
+  for (const [key, value] of Object.entries(target)) {
+    if (typeof value === 'function') wrapped[key] = wrapFunction(value as AnyFunction, request, false);
+  }
+  return wrapped as T;
+}
+
+/**
+ * The admin context's helpers (`billing`, `redirect`, `scopes`, `admin.graphql`) throw Responses the React Router way.
+ * Wrapped here so those Responses work in server functions, as described on toServerFunctionError.
+ */
+function withStartResponses<Context extends object>(context: Context, request: Request): Context {
+  const result = {...context} as Record<string, unknown>;
+  for (const [key, value] of Object.entries(context)) {
+    if (key === 'redirect' && typeof value === 'function') {
+      result[key] = wrapFunction(value as AnyFunction, request, true);
+    } else if ((key === 'billing' || key === 'scopes' || key === 'admin') && value && typeof value === 'object') {
+      result[key] = wrapMethods(value, request);
+    }
+  }
+  return result as Context;
 }
 
 /** Thrown by the admin middleware while server rendering when authentication answered with a non-redirect Response. */
