@@ -1,4 +1,4 @@
-import {BillingInterval, Session} from '@shopify/shopify-api';
+import {type BillingConfigSubscriptionLineItemPlan, BillingInterval, Session} from '@shopify/shopify-api';
 import {createSHA256HMAC, HashFormat} from '@shopify/shopify-api/runtime';
 import {MemorySessionStorage} from '@shopify/shopify-app-session-storage-memory';
 import {isRedirect} from '@tanstack/react-router';
@@ -288,9 +288,9 @@ describe('middleware.admin', () => {
 });
 
 describe('admin context helpers inside server functions', () => {
-  const BILLING = {
+  const BILLING: Record<string, BillingConfigSubscriptionLineItemPlan> = {
     Pro: {lineItems: [{amount: 9, currencyCode: 'USD', interval: BillingInterval.Every30Days}]},
-  } as const;
+  };
 
   function mockPurchase() {
     return mockExternalRequest({
