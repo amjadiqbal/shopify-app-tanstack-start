@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+  <defs>
+    <linearGradient id="ibg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#0B1220"/>
+    </linearGradient>
+    <linearGradient id="acc" gradientUnits="userSpaceOnUse" x1="120" y1="160" x2="440" y2="440">
+      <stop offset="0" stop-color="#F9A8D4"/>
+      <stop offset="1" stop-color="#EC4899"/>
+    </linearGradient>
+  </defs>
+  <defs><pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.6" fill="#1A2540"/></pattern></defs>
+  <rect width="1280" height="640" fill="#0B1220"/>
+  <rect width="1280" height="640" fill="url(#dots)"/>
+  <g transform="translate(80 64) scale(0.3125)">
+  <rect x="3" y="3" width="506" height="506" rx="110" fill="url(#ibg)" stroke="#24314D" stroke-width="6"/>
+  <!-- admin window -->
+  <rect x="78" y="104" width="340" height="276" rx="30" fill="#111C33" stroke="#475569" stroke-width="14"/>
+  <path d="M78 156 H418" stroke="#475569" stroke-width="12"/>
+  <circle cx="114" cy="130" r="9" fill="#64748B"/><circle cx="142" cy="130" r="9" fill="#64748B"/><circle cx="170" cy="130" r="9" fill="#64748B"/>
+  <!-- embedded app frame -->
+  <rect x="122" y="192" width="252" height="148" rx="20" fill="#0B1220" stroke="url(#acc)" stroke-width="16"/>
+  <!-- session token: header.payload.signature -->
+  <rect x="156" y="252" width="44" height="26" rx="13" fill="#94A3B8"/>
+  <circle cx="214" cy="265" r="6" fill="#F9A8D4"/>
+  <rect x="228" y="252" width="64" height="26" rx="13" fill="#CBD5E1"/>
+  <circle cx="306" cy="265" r="6" fill="#F9A8D4"/>
+  <rect x="320" y="252" width="22" height="26" rx="11" fill="#EC4899"/>
+  <!-- verified -->
+  <path d="M400 312 L462 336 V384 C462 424 436 450 400 466 C364 450 338 424 338 384 V336 Z" fill="url(#acc)" stroke="#0B1220" stroke-width="12" stroke-linejoin="round"/>
+  <path d="M374 390 L394 410 L428 372" fill="none" stroke="#0B1220" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="270" y="132" font-family="Inter, -apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="60" font-weight="800" fill="#F8FAFC" letter-spacing="-1.8">shopify-app-tanstack-start</text>
+  <text x="272" y="186" font-family="Inter, -apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="27" font-weight="500" fill="#CBD5E1">Embedded Shopify apps on <tspan fill="#F472B6" font-weight="600">TanStack Start</tspan>: auth, webhooks, app proxy, billing</text>
+  <rect x="80" y="252" width="1120" height="282" rx="20" fill="#0F172A" stroke="#1E2A44" stroke-width="2"/>
+  <circle cx="112" cy="282" r="7" fill="#334155"/><circle cx="136" cy="282" r="7" fill="#334155"/><circle cx="160" cy="282" r="7" fill="#334155"/>
+  <g font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="21" fill="#E2E8F0" xml:space="preserve">
+    <text x="112" y="330"><tspan fill="#C4B5FD">export const</tspan> loadProducts = <tspan fill="#F472B6">createServerFn</tspan>()</text>
+    <text x="137" y="362">.<tspan fill="#F472B6">middleware</tspan>([shopify.<tspan fill="#F472B6">adminMiddleware</tspan>()])</text>
+    <text x="137" y="394">.<tspan fill="#F472B6">handler</tspan>(<tspan fill="#C4B5FD">async</tspan> ({ context: { admin, session } }) =&gt; {</text>
+    <text x="162" y="426"><tspan fill="#C4B5FD">const</tspan> res = <tspan fill="#C4B5FD">await</tspan> admin.<tspan fill="#F472B6">graphql</tspan>(<tspan fill="#7DD3FC">`{ products(first: 5) { … } }`</tspan>)</text>
+    <text x="162" y="458"><tspan fill="#C4B5FD">return</tspan> res.<tspan fill="#F472B6">json</tspan>() <tspan dx="12" fill="#64748B">// session token verified, offline token exchanged</tspan></text>
+    <text x="137" y="490">})</text>
+  </g>
+  <g font-family="Inter, -apple-system, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="600">
+    <text x="80" y="590" fill="#F472B6">npm i @amjadiqbal/shopify-app-tanstack-start</text>
+    <text x="1200" y="590" text-anchor="end" fill="#94A3B8">built on @shopify/shopify-api · not affiliated with Shopify</text>
+  </g>
+</svg>
