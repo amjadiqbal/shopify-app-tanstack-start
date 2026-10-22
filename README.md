@@ -181,6 +181,21 @@ export const Route = createRootRoute({
 })
 ```
 
+For TypeScript to accept `<s-app-nav>` and other App Bridge elements, install `@shopify/app-bridge-types` as a dev dependency and add this file. App Bridge declares its elements on the global `JSX` namespace, but React 19 reads `React.JSX`:
+
+```ts
+// src/app-bridge-jsx.d.ts
+import type { SAppNavAttributes } from '@shopify/app-bridge-types'
+
+declare module 'react' {
+  namespace JSX {
+    interface IntrinsicElements {
+      's-app-nav': SAppNavAttributes
+    }
+  }
+}
+```
+
 `appBridgeHead()` adds the `shopify-api-key` meta tag and loads App Bridge (and Polaris web components, unless `polaris: false`) from Shopify's CDN in the document head, before your app's scripts, as App Bridge requires. `AppProvider` turns App Bridge navigation (`<s-app-nav>` links and the like) into TanStack Router navigation instead of iframe reloads.
 
 ## How it fits TanStack Start

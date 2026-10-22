@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Documentation
+
+- README: the App Bridge JSX types file needed for `<s-app-nav>` with React 19 (found in the fresh-install check).
+
 ## [0.1.0] - 2026-10-23
 
 ### Added
