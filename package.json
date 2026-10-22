@@ -1,6 +1,6 @@
 {
   "name": "@amjadiqbal/shopify-app-tanstack-start",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Build embedded Shopify apps on TanStack Start: session tokens and token exchange, webhook and app proxy verification, billing, and App Bridge setup, as Start middleware and server routes. Community package, not affiliated with Shopify.",
   "keywords": [
     "shopify",
