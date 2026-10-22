@@ -36,7 +36,7 @@
   <circle cx="112" cy="282" r="7" fill="#334155"/><circle cx="136" cy="282" r="7" fill="#334155"/><circle cx="160" cy="282" r="7" fill="#334155"/>
   <g font-family="'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace" font-size="21" fill="#E2E8F0" xml:space="preserve">
     <text x="112" y="330"><tspan fill="#C4B5FD">export const</tspan> loadProducts = <tspan fill="#F472B6">createServerFn</tspan>()</text>
-    <text x="137" y="362">.<tspan fill="#F472B6">middleware</tspan>([shopify.<tspan fill="#F472B6">adminMiddleware</tspan>()])</text>
+    <text x="137" y="362">.<tspan fill="#F472B6">middleware</tspan>([shopifyAdmin])</text>
     <text x="137" y="394">.<tspan fill="#F472B6">handler</tspan>(<tspan fill="#C4B5FD">async</tspan> ({ context: { admin, session } }) =&gt; {</text>
     <text x="162" y="426"><tspan fill="#C4B5FD">const</tspan> res = <tspan fill="#C4B5FD">await</tspan> admin.<tspan fill="#F472B6">graphql</tspan>(<tspan fill="#7DD3FC">`{ products(first: 5) { … } }`</tspan>)</text>
     <text x="162" y="458"><tspan fill="#C4B5FD">return</tspan> res.<tspan fill="#F472B6">json</tspan>() <tspan dx="12" fill="#64748B">// session token verified, offline token exchanged</tspan></text>

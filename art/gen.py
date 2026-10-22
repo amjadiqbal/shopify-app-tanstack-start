@@ -98,7 +98,7 @@ STR = "#7DD3FC"
 CMT = "#64748B"
 code = [
     (112, 330, f'<tspan fill="{KW}">export const</tspan> loadProducts = <tspan fill="{FN}">createServerFn</tspan>()'),
-    (137, 362, f'.<tspan fill="{FN}">middleware</tspan>([shopify.<tspan fill="{FN}">adminMiddleware</tspan>()])'),
+    (137, 362, f'.<tspan fill="{FN}">middleware</tspan>([shopifyAdmin])'),
     (137, 394, f'.<tspan fill="{FN}">handler</tspan>(<tspan fill="{KW}">async</tspan> ({{ context: {{ admin, session }} }}) =&gt; {{'),
     (162, 426, f'<tspan fill="{KW}">const</tspan> res = <tspan fill="{KW}">await</tspan> admin.<tspan fill="{FN}">graphql</tspan>(<tspan fill="{STR}">`{{ products(first: 5) {{ … }} }}`</tspan>)'),
     (162, 458, f'<tspan fill="{KW}">return</tspan> res.<tspan fill="{FN}">json</tspan>() <tspan dx="12" fill="{CMT}">// session token verified, offline token exchanged</tspan>'),
